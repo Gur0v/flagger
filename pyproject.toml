@@ -30,6 +30,9 @@ flagger = "flaggie.__main__:entry_point"
 [project.urls]
 Homepage = "https://github.com/Gur0v/flaggie/"
 
+[tool.flit.module]
+name = "flaggie"
+
 [tool.flit.sdist]
 include = [
     "test",
