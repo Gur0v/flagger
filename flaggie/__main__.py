@@ -248,16 +248,12 @@ def main(prog_name: str, *argv: str) -> int:
 
     pm = None
     if not args.no_package_manager:
-        try:
-            import gentoopm
-            pm = gentoopm.get_package_manager()
-        except Exception:
-            pm = get_subprocess_pm(args.config_root)
-            if pm is not None:
-                logging.warning(
-                    "Package manager API init failed in local Python env. "
-                    "Falling back to system python3 package manager helper")
-            else:
+        pm = get_subprocess_pm(args.config_root)
+        if pm is None:
+            try:
+                import gentoopm
+                pm = gentoopm.get_package_manager()
+            except Exception:
                 logging.warning(
                     "Package manager API init failed. You can disable "
                     "package manager integration using --no-package-manager, "
