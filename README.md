@@ -1,63 +1,108 @@
-# flaggie fork
+# flagger
 
-This fork of `flaggie` exists for one behavior change:
+`flagger` is a harder-edged fork of upstream `flaggie`.
 
-- when Portage package configuration is stored in a directory such as
-  `package.use/`, `flaggie` will only read and write
+Same basic job:
+
+- edit Gentoo `package.*` config entries from command line
+
+Main fork changes from upstream:
+
+- project/package name is now `flagger`
+- installed command is now `flagger`
+- `--version` prints `flagger <version>`
+- when config lives in directory form such as `package.use/`, writes go only to
   `99local.conf`
-- it will not pick another existing file in that directory
-- it will not modify sibling config files
+- sibling config files in `package.use/`, `package.accept_keywords/`, and other
+  `package.*` dirs are left alone
+- if local Python package-manager integration fails, `flagger` falls back to
+  system `python3` + system `gentoopm` when possible
+- this makes auto type guessing work better for `uv tool install` setups on
+  Gentoo
 
-Why:
+Why this fork exists:
 
 - keep machine-managed changes in one predictable file
-- avoid touching hand-maintained package config files
+- stop touching hand-maintained config fragments
+- work better with isolated tool installs
 
-What stays same:
+What did not change:
 
-- normal `flaggie` CLI behavior
-- direct file configs like `package.use` still work as before
-- if `99local.conf` does not exist yet, this fork creates it
+- internal Python module path is still `flaggie`
+- direct single-file configs like `/etc/portage/package.use` still work
+- normal flag editing behavior stays same
 
-Setup on Gentoo:
+## Install on Gentoo
 
 1. Install `uv`:
 
-   ```bash
-   sudo emerge -av dev-python/uv
-   ```
+```bash
+sudo emerge -av dev-python/uv app-portage/gentoopm
+```
 
-2. Install this fork as isolated tool, with `gentoopm` support:
+2. Install this repo as a tool:
 
-   ```bash
-   cd ~/flaggie
-   uv tool install --with gentoopm .
-   ```
+```bash
+cd ~/flaggie
+uv tool install --with gentoopm .
+```
 
-3. If `flaggie` is not found, add local bin dir to `PATH`:
+3. If command is not found, add local bin dir to `PATH`:
 
-   ```bash
-   export PATH="$HOME/.local/bin:$PATH"
-   ```
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
 
-4. Verify install:
+4. Verify:
 
-   ```bash
-   flaggie --version
-   flaggie --help
-   ```
+```bash
+flagger --version
+flagger --help
+```
 
-Notes:
+## Update after local changes
 
-- `uv tool install` gives global `flaggie` command without tying usage to repo
-  shell or local `venv`
-- after changing local source and wanting installed command updated, run:
+```bash
+cd ~/flaggie
+uv tool install --force --with gentoopm .
+```
 
-  ```bash
-  cd ~/flaggie
-  uv tool install --force --with gentoopm .
-  ```
+## Examples
 
-Upstream project:
+Explicit namespace:
 
-- original project: <https://github.com/gentoo/flaggie>
+```bash
+flagger media-video/pipewire +use::sound-server
+```
+
+Auto type guessing:
+
+```bash
+flagger pipewire +sound-server
+```
+
+If package-manager integration inside local tool env breaks, `flagger` tries to
+query the system Gentoo Python environment instead.
+
+## Behavior in config dirs
+
+Given a directory like:
+
+```text
+/etc/portage/package.use/
+```
+
+`flagger` will:
+
+- create `99local.conf` if missing
+- read and write `99local.conf`
+- not pick some other existing file
+- not modify sibling files in that directory
+
+This is deliberate.
+
+## Upstream
+
+Original project:
+
+- <https://github.com/gentoo/flaggie>

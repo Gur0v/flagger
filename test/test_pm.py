@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flaggie.config import TokenType
 from flaggie.pm import (match_package, get_valid_values, split_use_expand,
+                        SubprocessPM,
                         MatchError,
                         )
 
@@ -227,3 +228,26 @@ def test_get_valid_values_env_not_exist(tmp_path):
      ])
 def test_split_use_expand(flag, expected):
     assert split_use_expand(MockedPM(), flag) == expected
+
+
+def test_match_package_subprocess_pm():
+    pm = SubprocessPM("python3", Path("/"))
+    pm._run = lambda payload: {"value": "app-foo/bar"}  # type: ignore
+    assert match_package(pm, "bar") == "app-foo/bar"
+
+
+def test_get_valid_values_subprocess_pm():
+    pm = SubprocessPM("python3", Path("/"))
+    pm._run = lambda payload: {"values": ["*", "foo"]}  # type: ignore
+    assert (get_valid_values(pm, "app-foo/bar", TokenType.USE_FLAG, None)
+            == frozenset(["*", "foo"]))
+
+
+def test_split_use_expand_subprocess_pm():
+    pm = SubprocessPM("python3", Path("/"))
+    pm._run = lambda payload: {  # type: ignore
+        "group": "TARGETS",
+        "flag": "frobnicate",
+    }
+    assert split_use_expand(pm, "targets_frobnicate") == (
+        "TARGETS", "frobnicate")

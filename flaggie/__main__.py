@@ -21,7 +21,7 @@ from flaggie.config import (TokenType, find_config_files, read_config_files,
                             )
 from flaggie.mangle import mangle_flag, remove_flag
 from flaggie.pm import (match_package, get_valid_values, split_use_expand,
-                        MatchError,
+                        MatchError, get_subprocess_pm,
                         )
 
 if typing.TYPE_CHECKING:
@@ -238,7 +238,7 @@ def main(prog_name: str, *argv: str) -> int:
     argp.add_argument("--version",
                       action="version",
                       help="Print program version and exit",
-                      version=f"flaggie (Gurov's version) {__version__}")
+                      version=f"flagger {__version__}")
     args, request = argp.parse_known_args(argv)
 
     if args.debug:
@@ -252,11 +252,17 @@ def main(prog_name: str, *argv: str) -> int:
             import gentoopm
             pm = gentoopm.get_package_manager()
         except Exception:
-            logging.warning(
-                "Package manager API init failed. You can disable package "
-                "manager integration using --no-package-manager, at the cost "
-                "of losing category and argument type guessing and validation")
-            raise
+            pm = get_subprocess_pm(args.config_root)
+            if pm is not None:
+                logging.warning(
+                    "Package manager API init failed in local Python env. "
+                    "Falling back to system python3 package manager helper")
+            else:
+                logging.warning(
+                    "Package manager API init failed. You can disable "
+                    "package manager integration using --no-package-manager, "
+                    "at the cost of losing category and argument type "
+                    "guessing and validation")
 
     portage_dir = args.config_root / "etc/portage"
     if not portage_dir.is_dir():
