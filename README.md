@@ -1,59 +1,52 @@
 # flagger
 
-`flagger` is a harder-edged fork of upstream `flaggie`.
+`flagger` is a Gentoo-focused fork of upstream `flaggie`.
 
-Same basic job:
+It still edits Portage `package.*` config from the command line, but this fork
+is stricter, more predictable, and much nicer to use on a real Gentoo system.
 
-- edit Gentoo `package.*` config entries from command line
+## What changed from upstream
 
-Main fork changes from upstream:
-
-- project/package name is now `flagger`
-- installed command is now `flagger`
+- user-facing project name is `flagger`
+- installed command is `flagger`
 - `--version` prints `flagger <version>`
-- when config lives in directory form such as `package.use/`, writes go only to
+- when a `package.*` config is a directory, `flagger` writes only to
   `99local.conf`
-- sibling config files in `package.use/`, `package.accept_keywords/`, and other
-  `package.*` dirs are left alone
-- if local Python package-manager integration fails, `flagger` falls back to
-  system `python3` + system `gentoopm` when possible
-- this makes auto type guessing work better for `uv tool install` setups on
-  Gentoo
+- sibling config files are never edited
+- when installed with `uv`, `flagger` can still use system `gentoopm` for auto
+  type guessing
+- on real `/etc/portage` runs, `flagger` auto-reexecs itself through `doas` or
+  `sudo` if needed
 
-Why this fork exists:
+## Why this fork exists
 
 - keep machine-managed changes in one predictable file
-- stop touching hand-maintained config fragments
-- work better with isolated tool installs
-
-What did not change:
-
-- internal Python module path is still `flaggie`
-- direct single-file configs like `/etc/portage/package.use` still work
-- normal flag editing behavior stays same
+- avoid touching hand-maintained config fragments
+- make isolated installs work well on Gentoo
+- remove extra friction from normal day-to-day use
 
 ## Install on Gentoo
 
-1. Install `uv`:
+Install dependencies:
 
 ```bash
 sudo emerge -av dev-python/uv app-portage/gentoopm
 ```
 
-2. Install this repo as a tool:
+Install `flagger` from this checkout:
 
 ```bash
-cd ~/flaggie
+cd ~/flagger
 uv tool install --with gentoopm .
 ```
 
-3. If command is not found, add local bin dir to `PATH`:
+If `flagger` is not in `PATH` yet:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-4. Verify:
+Verify:
 
 ```bash
 flagger --version
@@ -63,30 +56,32 @@ flagger --help
 ## Update after local changes
 
 ```bash
-cd ~/flaggie
+cd ~/flagger
 uv tool install --force --with gentoopm .
 ```
 
-## Examples
+## Normal usage
 
-Explicit namespace:
-
-```bash
-flagger media-video/pipewire +use::sound-server
-```
-
-Auto type guessing:
+You can usually just run it directly:
 
 ```bash
 flagger pipewire +sound-server
+flagger pipewire +~amd64
 ```
 
-If package-manager integration inside local tool env breaks, `flagger` tries to
-query the system Gentoo Python environment instead.
+If you are operating on the real `/etc/portage`, `flagger` will invoke
+`doas` or `sudo` itself when needed. You do not need to start it with
+`sudo flagger ...`.
 
-## Behavior in config dirs
+If you are working against another root, pass `--config-root` explicitly:
 
-Given a directory like:
+```bash
+flagger --config-root /tmp/testroot pipewire +sound-server
+```
+
+## Directory behavior
+
+If Portage config uses directory layout, for example:
 
 ```text
 /etc/portage/package.use/
@@ -96,10 +91,22 @@ Given a directory like:
 
 - create `99local.conf` if missing
 - read and write `99local.conf`
-- not pick some other existing file
-- not modify sibling files in that directory
+- leave every sibling file alone
 
-This is deliberate.
+This applies to other `package.*` directories too, such as:
+
+- `package.accept_keywords/`
+- `package.license/`
+- `package.properties/`
+- `package.accept_restrict/`
+- `package.env/`
+
+## Notes
+
+- internal Python module name is still `flaggie`
+- direct single-file configs like `/etc/portage/package.use` still work
+- if auto type guessing cannot determine a namespace, you can still force one
+  with forms like `+use::sound-server` or `+kw::~amd64`
 
 ## Upstream
 

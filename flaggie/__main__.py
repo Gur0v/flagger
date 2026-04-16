@@ -201,11 +201,15 @@ def should_auto_elevate(argv: list[str]) -> bool:
     return get_requested_config_root(argv) == Path("/")
 
 
+def get_privilege_helper() -> typing.Optional[str]:
+    return next((cmd for cmd in ("doas", "sudo") if shutil.which(cmd)), None)
+
+
 def reexec_with_privileges(prog_name: str, argv: list[str]) -> None:
     if not should_auto_elevate(argv):
         return
 
-    helper = next((cmd for cmd in ("doas", "sudo") if shutil.which(cmd)), None)
+    helper = get_privilege_helper()
     if helper is None:
         return
 
@@ -217,6 +221,23 @@ def reexec_with_privileges(prog_name: str, argv: list[str]) -> None:
     env = dict(os.environ)
     env[AUTO_ELEVATE_ENV] = "1"
     os.execvpe(helper, [helper, command, *argv], env)
+
+
+def get_package_manager(config_root: Path) -> typing.Optional["gentoopm.BasePM"]:
+    pm = get_subprocess_pm(config_root)
+    if pm is not None:
+        return pm
+
+    try:
+        import gentoopm
+        return gentoopm.get_package_manager()
+    except Exception:
+        logging.warning(
+            "Package manager API init failed. You can disable "
+            "package manager integration using --no-package-manager, "
+            "at the cost of losing category and argument type "
+            "guessing and validation")
+        return None
 
 
 def main(prog_name: str, *argv: str) -> int:
@@ -289,17 +310,7 @@ def main(prog_name: str, *argv: str) -> int:
 
     pm = None
     if not args.no_package_manager:
-        pm = get_subprocess_pm(args.config_root)
-        if pm is None:
-            try:
-                import gentoopm
-                pm = gentoopm.get_package_manager()
-            except Exception:
-                logging.warning(
-                    "Package manager API init failed. You can disable "
-                    "package manager integration using --no-package-manager, "
-                    "at the cost of losing category and argument type "
-                    "guessing and validation")
+        pm = get_package_manager(args.config_root)
 
     portage_dir = args.config_root / "etc/portage"
     if not portage_dir.is_dir():
