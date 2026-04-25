@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -22,6 +23,22 @@ class OperationSpec:
     def __init__(self, function, *, flag_required: bool):
         self.function = function
         self.flag_required = flag_required
+
+
+@dataclass(frozen=True)
+class RunResult:
+    modified_files: int
+    pretend: bool
+
+    @property
+    def message(self) -> str:
+        if self.pretend:
+            if self.modified_files:
+                return f"pretend: prepared changes for {self.modified_files} file(s)"
+            return "pretend: no changes needed"
+        if self.modified_files:
+            return f"success: updated {self.modified_files} file(s)"
+        return "success: no changes needed"
 
 
 OPERATIONS = {
@@ -48,7 +65,7 @@ def resolve_packages(parser, packages: list[str]) -> list[str]:
     return resolved
 
 
-def run(argv: list[str], *, prog_name: str) -> int:
+def run(argv: list[str], *, prog_name: str) -> RunResult:
     parser = build_parser(prog_name)
     args, request = parser.parse_known_args(argv)
     if not request:
@@ -83,8 +100,13 @@ def run(argv: list[str], *, prog_name: str) -> int:
                 for package in resolved_packages:
                     operation.function(config_files_by_type[token_type], package, group, flag)
 
+    all_config_files = [
+        config_file for files in config_files_by_type.values() for config_file in files
+    ]
+    modified_files = sum(1 for config_file in all_config_files if config_file.modified)
+
     save_config_files(
-        (config_file for files in config_files_by_type.values() for config_file in files),
+        all_config_files,
         confirm_cb=lambda orig_file, temp_file: not args.pretend,
     )
-    return 0
+    return RunResult(modified_files=modified_files, pretend=args.pretend)

@@ -6,6 +6,10 @@ It is not a drop-in replacement. It is not trying to preserve every feature. It 
 
 The goal is a tool that is predictable, easy to maintain, and fits a modern Python workflow, especially with `uv`.
 
+One of the reasons for the rewrite was supporting the workflows I actually use,
+including clean `uv` installs and repo-qualified wildcard atoms such as
+`*/*::steam-overlay`.
+
 ## What Changed
 
 This version is deliberately narrower:
@@ -15,6 +19,7 @@ This version is deliberately narrower:
 * writes to `99local.conf` when targeting a directory
 * leaves other files alone
 * installs cleanly with `uv`
+* supports repo-qualified wildcard atoms like `*/*::steam-overlay`
 * only escalates privileges when it actually needs to write
 * supports `sudo`, `sudo-rs`, `doas`, `run0`, and `pkexec`
 * keeps the original syntax, with optional `use::` and `kw::` namespaces
@@ -61,6 +66,7 @@ flagger media-video/pipewire +PYTHON_TARGETS::python3_12
 flagger media-video/pipewire +~amd64
 flagger media-video/pipewire +kw::amd64
 flagger media-video/pipewire %kw::~amd64
+flagger '*/*::steam-overlay' +~amd64
 ```
 
 Keyword-style values (`~amd64`, `*`, `~*`, `**`) go to `package.accept_keywords`.

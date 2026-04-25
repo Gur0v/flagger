@@ -82,3 +82,11 @@ def test_reexec_with_privileges(monkeypatch):
     assert called["file"] == "run0"
     assert called["args"] == ["run0", "/usr/bin/flagger", "mesa", "+opencl"]
     assert called["env"][AUTO_ELEVATE_ENV] == "1"
+
+
+def test_reexec_with_privileges_returns_false_when_not_needed(monkeypatch):
+    monkeypatch.setattr(
+        "flagger.privilege.should_retry_with_elevation",
+        lambda argv, config_root: False,
+    )
+    assert not reexec_with_privileges("flagger", ["mesa", "+opencl"], config_root=Path("/"))

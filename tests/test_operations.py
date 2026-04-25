@@ -11,8 +11,10 @@ from flagger.models import ConfigFile, ConfigLine
 from flagger.operations import (
     WildcardEntryError,
     insert_sorted,
+    is_global_wildcard_package,
     is_wildcard_flag,
     is_wildcard_package,
+    package_key,
     package_pattern_to_re,
     remove_flag,
     update_flag,
@@ -120,6 +122,17 @@ def test_toggle_flag_new_entry_global(new):
 
 
 @param_new()
+def test_toggle_flag_new_entry_global_repo(new):
+    config = get_config(["dev-foo/bar foo"])
+    update_flag(config, "*/*::steam-overlay", None, new.lstrip("-"), enabled=not new.startswith("-"))
+    assert get_modified_line_numbers(config[0]) == {0}
+    assert config[0].parsed_lines == [
+        ConfigLine("*/*::steam-overlay", [new]),
+        ConfigLine("dev-foo/bar", ["foo"]),
+    ]
+
+
+@param_new()
 def test_toggle_flag_new_entry_wildcard(new):
     config = get_config(["dev-foo/bar foo"])
     with pytest.raises(WildcardEntryError):
@@ -143,7 +156,9 @@ def test_remove_all_flags():
 
 def test_helpers():
     assert package_pattern_to_re("dev-foo/*").match("dev-foo/bar")
+    assert package_key("*/*::steam-overlay") == "*/*"
     assert is_wildcard_package("dev-foo/*")
+    assert is_global_wildcard_package("*/*::steam-overlay")
     assert is_wildcard_flag("~*")
     flags = ["bar", "zoo"]
     insert_sorted(flags, "foo")

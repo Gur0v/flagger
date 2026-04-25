@@ -36,14 +36,15 @@ def resolve_program(prog_name: str) -> str:
     return shutil.which(prog_name) or prog_name
 
 
-def reexec_with_privileges(prog_name: str, argv: list[str], *, config_root: Path) -> None:
+def reexec_with_privileges(prog_name: str, argv: list[str], *, config_root: Path) -> bool:
     if not should_retry_with_elevation(argv, config_root=config_root):
-        return
+        return False
 
     helper = get_elevation_helper()
     if helper is None:
-        return
+        return False
 
     env = dict(os.environ)
     env[AUTO_ELEVATE_ENV] = "1"
     os.execvpe(helper, [helper, resolve_program(prog_name), *argv], env)
+    return True

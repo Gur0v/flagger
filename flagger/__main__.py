@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from flagger.app import run
@@ -13,10 +14,15 @@ def main() -> None:
     argv = list(sys.argv[1:])
     config_root = get_config_root()
     try:
-        sys.exit(run(argv, prog_name=sys.argv[0]))
-    except PermissionError:
-        reexec_with_privileges(sys.argv[0], argv, config_root=config_root)
-        raise
+        result = run(argv, prog_name=sys.argv[0])
+    except PermissionError as err:
+        if reexec_with_privileges(sys.argv[0], argv, config_root=config_root):
+            raise AssertionError("Privilege re-exec unexpectedly returned")
+        print(f"flagger: failed: {os.strerror(err.errno)}", file=sys.stderr)
+        raise SystemExit(1) from err
+
+    print(result.message)
+    raise SystemExit(0)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,10 @@ def package_pattern_to_re(pattern: str) -> re.Pattern[str]:
     return re.compile(".*".join(re.escape(part) for part in pattern.split("*")))
 
 
+def package_key(package: str) -> str:
+    return package.split("::", 1)[0]
+
+
 def is_wildcard_package(package: str) -> bool:
     if package.startswith("="):
         package = package.rstrip("*")
@@ -73,7 +77,11 @@ def iter_matching_flags(
 
 class WildcardEntryError(Exception):
     def __init__(self) -> None:
-        super().__init__("Adding wildcard entries other than */* is not supported")
+        super().__init__("Adding wildcard entries other than */* or */*::repo is not supported")
+
+
+def is_global_wildcard_package(package: str) -> bool:
+    return package_key(package) == "*/*"
 
 
 def insert_sorted(flags: list[str], new_flag: str) -> None:
@@ -121,7 +129,10 @@ def update_flag(
                 matched_name = flag_list[index].lstrip("-")
                 effective_name = matched_name if matched_group is None else f"{matched_group}_{matched_name}"
                 if line.package == package and effective_name == full_name:
-                    flag_list[index] = rendered_flag + matched_name
+                    updated_value = rendered_flag + matched_name
+                    if flag_list[index] == updated_value:
+                        return True
+                    flag_list[index] = updated_value
                     line.invalidate()
                     config_file.modified = True
                     return True
@@ -174,7 +185,7 @@ def update_flag(
 
     def append_new_line(new_line: ConfigLine) -> None:
         assert new_line.package is not None
-        if new_line.package == "*/*":
+        if is_global_wildcard_package(new_line.package):
             config_files[0].parsed_lines.insert(0, new_line)
             config_files[0].modified = True
             return
