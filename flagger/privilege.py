@@ -7,6 +7,8 @@ import shutil
 
 from pathlib import Path
 
+from flagger.app import validate_request
+
 
 AUTO_ELEVATE_ENV = "FLAGGER_ALREADY_ELEVATED"
 ELEVATION_HELPERS = ("sudo", "sudo-rs", "doas", "run0", "pkexec")
@@ -39,6 +41,8 @@ def resolve_program(prog_name: str) -> str:
 def reexec_with_privileges(prog_name: str, argv: list[str], *, config_root: Path) -> bool:
     if not should_retry_with_elevation(argv, config_root=config_root):
         return False
+
+    validate_request(argv, prog_name=prog_name)
 
     helper = get_elevation_helper()
     if helper is None:

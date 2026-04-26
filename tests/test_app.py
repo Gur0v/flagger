@@ -136,3 +136,18 @@ def test_run_requires_request(tmp_path, monkeypatch):
     monkeypatch.setenv("FLAGGER_CONFIG_ROOT", str(tmp_path))
     with pytest.raises(SystemExit):
         run([], prog_name="flagger")
+
+
+def test_run_rejects_unknown_use_flag(tmp_path, monkeypatch):
+    (tmp_path / "etc/portage").mkdir(parents=True)
+    monkeypatch.setenv("FLAGGER_CONFIG_ROOT", str(tmp_path))
+    monkeypatch.setattr("flagger.app.match_package", lambda package: package)
+    monkeypatch.setattr(
+        "flagger.app.get_package_metadata",
+        lambda package: {"use": frozenset({"sound-server"}), "keywords": frozenset({"amd64"})},
+    )
+
+    with pytest.raises(SystemExit):
+        run(["media-video/pipewire", "+nonexistentflag"], prog_name="flagger")
+
+    assert not (tmp_path / "etc/portage/package.use").exists()

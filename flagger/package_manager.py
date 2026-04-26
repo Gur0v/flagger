@@ -17,6 +17,10 @@ class MatchError(RuntimeError):
     pass
 
 
+class ValidationUnavailableError(RuntimeError):
+    pass
+
+
 REPO_SEPARATOR = "::"
 PACKAGE_OPERATORS = ("<=", ">=", "=", "<", ">", "~")
 SHORT_PACKAGE_RE = re.compile(r"^[A-Za-z0-9+_.-]+$")
@@ -49,20 +53,47 @@ else:
 """
 
 
+SYSTEM_GENTOOPM_METADATA_HELPER = r"""
+import json
+import sys
+
+import gentoopm
+
+
+request = json.loads(sys.argv[1])
+pm = gentoopm.get_package_manager()
+package_spec = request["package_spec"]
+matches = list(pm.stack.filter(package_spec))
+if not matches:
+    print(json.dumps({"error": "no_match"}))
+else:
+    print(json.dumps({
+        "use": sorted({str(flag) for pkg in matches for flag in pkg.use}),
+        "keywords": sorted({str(keyword) for pkg in matches for keyword in pkg.keywords}),
+    }))
+"""
+
+
+class PackageMetadata(dict[str, frozenset[str]]):
+    pass
+
+
 class SubprocessPackageManager:
     def __init__(self, python_executable: str):
         self.python_executable = python_executable
 
-    def match_package(self, package_spec: str) -> str:
+    def _run_helper(self, helper: str, package_spec: str) -> dict[str, Any]:
         process = subprocess.run(
-            [self.python_executable, "-c", SYSTEM_GENTOOPM_HELPER, json.dumps({"package_spec": package_spec})],
+            [self.python_executable, "-c", helper, json.dumps({"package_spec": package_spec})],
             capture_output=True,
             text=True,
         )
         if process.returncode != 0:
             raise MatchError(f"System package manager helper failed: {process.stderr.strip()}")
+        return json.loads(process.stdout)
 
-        payload = json.loads(process.stdout)
+    def match_package(self, package_spec: str) -> str:
+        payload = self._run_helper(SYSTEM_GENTOOPM_HELPER, package_spec)
         error = payload.get("error")
         if error == "no_match":
             raise MatchError(f"{package_spec!r} matched no packages")
@@ -71,6 +102,15 @@ class SubprocessPackageManager:
                 f"{package_spec!r} is ambiguous, matched {', '.join(payload['matched'])}"
             )
         return payload["value"]
+
+    def get_package_metadata(self, package_spec: str) -> PackageMetadata:
+        payload = self._run_helper(SYSTEM_GENTOOPM_METADATA_HELPER, package_spec)
+        if payload.get("error") == "no_match":
+            raise MatchError(f"{package_spec!r} matched no packages")
+        return PackageMetadata(
+            use=frozenset(payload["use"]),
+            keywords=frozenset(payload["keywords"]),
+        )
 
 
 def get_package_manager() -> Any | None:
@@ -163,3 +203,33 @@ def match_package(package_spec: str) -> str:
         raise MatchError(f"{package_spec!r} is ambiguous, matched {', '.join(sorted(matches))}")
     resolved = base.replace(str(parsed.key.package), next(iter(matches)))
     return f"{resolved}{REPO_SEPARATOR}{repo}" if repo is not None else resolved
+
+
+@functools.cache
+def get_package_metadata(package_spec: str) -> PackageMetadata:
+    validate_package_spec(package_spec)
+
+    if is_wildcard_package(package_spec):
+        raise ValidationUnavailableError(
+            f"{package_spec!r} uses wildcards, so flag validation is unavailable"
+        )
+
+    base, _repo = split_package_components(package_spec)
+    if "/" not in strip_operator(base):
+        package_spec = match_package(package_spec)
+        base, _repo = split_package_components(package_spec)
+
+    package_manager = cached_package_manager()
+    if package_manager is None:
+        raise ValidationUnavailableError("Package metadata lookup is unavailable")
+
+    if isinstance(package_manager, SubprocessPackageManager):
+        return package_manager.get_package_metadata(base)
+
+    matches = list(package_manager.stack.filter(base))
+    if not matches:
+        raise MatchError(f"{package_spec!r} matched no packages")
+    return PackageMetadata(
+        use=frozenset(str(flag) for pkg in matches for flag in pkg.use),
+        keywords=frozenset(str(keyword) for pkg in matches for keyword in pkg.keywords),
+    )

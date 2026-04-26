@@ -7,6 +7,8 @@ import pytest
 from flagger.package_manager import (
     MatchError,
     SubprocessPackageManager,
+    ValidationUnavailableError,
+    get_package_metadata,
     match_package,
     validate_package_spec,
 )
@@ -27,16 +29,23 @@ class MockPackageManager:
     class stack:
         @staticmethod
         def filter(atom: str):
+            def package(key: str):
+                return types.SimpleNamespace(
+                    key=key,
+                    use={"sound-server", "python_targets_python3_12"},
+                    keywords={"amd64", "~amd64"},
+                )
+
             if atom == "enoent":
                 return []
             if atom == "multiple":
                 return [
-                    types.SimpleNamespace(key="app-foo/multi"),
-                    types.SimpleNamespace(key="app-bar/multi"),
+                    package("app-foo/multi"),
+                    package("app-bar/multi"),
                 ]
             if "/" in atom:
-                return [types.SimpleNamespace(key=atom)]
-            return [types.SimpleNamespace(key=f"app-foo/{atom}")]
+                return [package(atom)]
+            return [package(f"app-foo/{atom}")]
 
 
 def test_match_package_with_category():
@@ -69,6 +78,21 @@ def test_match_package_subprocess_package_manager(monkeypatch):
     monkeypatch.setattr(package_manager, "match_package", lambda package_spec: "app-foo/bar")
     monkeypatch.setattr("flagger.package_manager.cached_package_manager", lambda: package_manager)
     assert match_package("bar") == "app-foo/bar"
+
+
+def test_get_package_metadata(monkeypatch):
+    get_package_metadata.cache_clear()
+    monkeypatch.setattr("flagger.package_manager.cached_package_manager", lambda: MockPackageManager())
+    metadata = get_package_metadata("app-foo/bar")
+    assert metadata["use"] == frozenset({"sound-server", "python_targets_python3_12"})
+    assert metadata["keywords"] == frozenset({"amd64", "~amd64"})
+
+
+def test_get_package_metadata_without_package_manager(monkeypatch):
+    get_package_metadata.cache_clear()
+    monkeypatch.setattr("flagger.package_manager.cached_package_manager", lambda: None)
+    with pytest.raises(ValidationUnavailableError):
+        get_package_metadata("app-foo/bar")
 
 
 def test_validate_package_spec_repo_qualified_wildcard():

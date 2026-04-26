@@ -63,7 +63,11 @@ def test_resolve_program_uses_absolute_path(monkeypatch):
 
 
 def test_reexec_with_privileges(monkeypatch):
-    monkeypatch.setattr("flagger.privilege.should_auto_elevate", lambda argv, config_root: True)
+    monkeypatch.setattr(
+        "flagger.privilege.should_retry_with_elevation",
+        lambda argv, config_root: True,
+    )
+    monkeypatch.setattr("flagger.privilege.validate_request", lambda argv, prog_name: None)
     monkeypatch.setattr("flagger.privilege.get_elevation_helper", lambda: "run0")
     monkeypatch.setattr("flagger.privilege.resolve_program", lambda program: "/usr/bin/flagger")
     called = {}
@@ -90,3 +94,18 @@ def test_reexec_with_privileges_returns_false_when_not_needed(monkeypatch):
         lambda argv, config_root: False,
     )
     assert not reexec_with_privileges("flagger", ["mesa", "+opencl"], config_root=Path("/"))
+
+
+def test_reexec_with_privileges_stops_on_invalid_request(monkeypatch):
+    monkeypatch.setattr(
+        "flagger.privilege.should_retry_with_elevation",
+        lambda argv, config_root: True,
+    )
+    monkeypatch.setattr(
+        "flagger.privilege.validate_request",
+        lambda argv, prog_name: (_ for _ in ()).throw(SystemExit(2)),
+    )
+    monkeypatch.setattr("flagger.privilege.get_elevation_helper", lambda: pytest.fail("helper lookup should not run"))
+
+    with pytest.raises(SystemExit):
+        reexec_with_privileges("flagger", ["media-video/pipewire", "+nonexistentflag"], config_root=Path("/"))

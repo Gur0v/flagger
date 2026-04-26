@@ -20,7 +20,7 @@ This version is deliberately narrower:
 * leaves other files alone
 * installs cleanly with `uv`
 * supports repo-qualified wildcard atoms like `*/*::steam-overlay`
-* only escalates privileges when it actually needs to write
+* only escalates privileges when it actually needs to write, and never for invalid requests
 * supports `sudo`, `sudo-rs`, `doas`, `run0`, and `pkexec`
 * keeps the original syntax, with optional `use::` and `kw::` namespaces
 * can read requests from a file or stdin
@@ -33,7 +33,7 @@ If you want the full feature set of old `flaggie`, use `flaggie`.
 
 ```bash
 cd ~/Projects/flagger
-uv tool install --with gentoopm .
+uv tool install --force --with gentoopm .
 ```
 
 `gentoopm` is optional, but useful if you want short names like `pipewire` to resolve automatically.
@@ -110,7 +110,9 @@ If the same request contains duplicates or conflicts, `flagger` keeps the last o
 
 You can point `flagger` at another Portage root using `FLAGGER_CONFIG_ROOT`.
 
-On a real system, it tries to write first. If that fails with a `PermissionError`, it re-runs itself through the first available helper (`sudo`, `sudo-rs`, `doas`, `run0`, or `pkexec`).
+On a real system, it validates the request first, then tries to write. If a valid request fails with a `PermissionError`, it re-runs itself through the first available helper (`sudo`, `sudo-rs`, `doas`, `run0`, or `pkexec`).
+
+Invalid package names, unknown USE flags, and invalid keyword requests fail before any privilege escalation is attempted.
 
 No guessing, no always-running-as-root.
 

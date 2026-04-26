@@ -18,7 +18,12 @@ from flagger.cli import (
 from flagger.config_files import find_config_files, read_config_files, save_config_files
 from flagger.models import ConfigFile, TokenType
 from flagger.operations import remove_flag, update_flag
-from flagger.package_manager import MatchError, match_package
+from flagger.package_manager import (
+    MatchError,
+    ValidationUnavailableError,
+    get_package_metadata,
+    match_package,
+)
 
 
 class OperationSpec:
@@ -160,6 +165,55 @@ def normalize_operations(
     return list(planned_by_key.values()), warnings
 
 
+def validate_planned_operations(
+    parser,
+    package_resolutions: list[PackageResolution],
+    planned_operations: list[PlannedOperation],
+) -> None:
+    for package_resolution in package_resolutions:
+        try:
+            package_metadata = get_package_metadata(package_resolution.resolved)
+        except ValidationUnavailableError:
+            continue
+        except MatchError as err:
+            parser.error(str(err))
+
+        for planned in planned_operations:
+            if planned.flag is None:
+                continue
+
+            if planned.token_type is TokenType.KEYWORD:
+                if planned.flag in {"*", "~*", "**"}:
+                    continue
+                if planned.flag not in package_metadata["keywords"]:
+                    parser.error(
+                        f"{planned.source}: {planned.flag!r} is not a keyword for "
+                        f"{package_resolution.resolved!r}"
+                    )
+                continue
+
+            full_flag = planned.flag
+            if planned.group is not None:
+                full_flag = f"{planned.group.lower()}_{planned.flag}"
+            if full_flag not in package_metadata["use"]:
+                parser.error(
+                    f"{planned.source}: {full_flag!r} is not a USE flag for "
+                    f"{package_resolution.resolved!r}"
+                )
+
+
+def validate_request(argv: list[str], *, prog_name: str) -> None:
+    parser = build_parser(prog_name)
+    args = parse_cli_args(parser, argv)
+    if not args.request:
+        parser.error("No request specified")
+
+    for packages, raw_operations in split_arg_sets(parser, args.request, set(OPERATIONS)):
+        resolved_packages = resolve_packages(parser, packages)
+        planned_operations, _warnings = normalize_operations(parser, raw_operations)
+        validate_planned_operations(parser, resolved_packages, planned_operations)
+
+
 def run(argv: list[str], *, prog_name: str) -> RunResult:
     parser = build_parser(prog_name)
     args = parse_cli_args(parser, argv)
@@ -182,6 +236,7 @@ def run(argv: list[str], *, prog_name: str) -> RunResult:
         resolved_packages = resolve_packages(parser, packages)
         package_resolutions.extend(resolved_packages)
         planned_operations, request_warnings = normalize_operations(parser, raw_operations)
+        validate_planned_operations(parser, resolved_packages, planned_operations)
         warnings.extend(request_warnings)
 
         for planned in planned_operations:
